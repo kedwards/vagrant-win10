@@ -25,8 +25,6 @@ function pause(){
  echo ""
 }
 
-# change to your target directory
-mkdir -p ${BUILD_PATH}
 # clone the repository
 git clone ${GITHUB_URL} ${BUILD_PATH}
 
@@ -40,21 +38,23 @@ rm -rf $REMOVE_BUILD \
   appveyor.yml AZURE.md fix.sh ansible \
   bin nested test
 
-# modify the packer templates for windows 10
-sed -i.bak 's/vagrant-windows-10-preview/Windows 10 Base Box/;s/windows_10_preview/windows10base/'  vagrantfile-windows_10.template
+cd -
 
-sed -i.bak "s|<ProductKey>[^>]*$|| \
-  ;s|<WillShowUI>[^>]*>|| \
-  ;s|</ProductKey>[^>]*$|| \
-  ;s|<Key>/IMAGE/NAME</Key>|<Key>/IMAGE/INDEX</Key>| \
-  ;s|<Value>Windows 10 Enterprise Evaluation</Value>|<Value>1</Value>| \
-  ;s| <!-- WITH WINDOWS UPDATES -->|<!--| \
-  ;s|<!-- END WITH WINDOWS UPDATES -->|-->| \
-  ;s|<ComputerName>vagrant-10</ComputerName>|<ComputerName>${VAGRANT_BOX_NAME}</ComputerName>| \
-  ;s|<TimeZone>Pacific Standard Time</TimeZone>|<TimeZone>${TIMEZONE} Standard Time</TimeZone>|" ./answer_files/10/Autounattend.xml
+# modify the packer templates for windows 10
+sed -i.bak 's/vagrant-windows-10-preview/Windows 10 Base Box/;s/windows_10_preview/windows10base/' ${BUILD_PATH}/vagrantfile-windows_10.template
+
+# sed -i.bak "s|<ProductKey>[^>]*$|| \
+#   ;s|<WillShowUI>[^>]*>|| \
+#   ;s|</ProductKey>[^>]*$|| \
+#   ;s|<Key>/IMAGE/NAME</Key>|<Key>/IMAGE/INDEX</Key>| \
+#   ;s|<Value>Windows 10 Enterprise Evaluation</Value>|<Value>1</Value>| \
+#   ;s| <!-- WITH WINDOWS UPDATES -->|<!--| \
+#   ;s|<!-- END WITH WINDOWS UPDATES -->|-->| \
+#   ;s|<ComputerName>vagrant-10</ComputerName>|<ComputerName>${VAGRANT_BOX_NAME}</ComputerName>| \
+#   ;s|<TimeZone>Pacific Standard Time</TimeZone>|<TimeZone>${TIMEZONE} Standard Time</TimeZone>|" ${BUILD_PATH}/answer_files/10/Autounattend.xml
 
 # modify the build script for windows 10
-cat <<EOF > build_windows_10.sh
+cat <<EOF > ${BUILD_PATH}/build_windows_10.sh
 #!/bin/bash
 packer build --only=virtualbox-iso \
   --var iso_url=${ISO_URL} \
@@ -64,37 +64,20 @@ packer build --only=virtualbox-iso \
 EOF
 
 # get cloned debloat scripts
-sed -i.bak 's|StefanScherer|kedwards|' ${BUILD_DIR}/scripts/debloat-windows.ps1
+sed -i.bak 's|StefanScherer|kedwards|' ${BUILD_PATH}/scripts/debloat-windows.ps1
 
 # validate the packer template and pause for Autounattended changes
+cd ${BUILD_PATH}
+
 packer validate --only=virtualbox-iso windows_10.json && pause
 
 # Build
 ./build_windows_10.sh
 
+cd -
+
 # install the vagrant box in your local repository
-vagrant box add --name windows10base ${BUILD_DIR}/windows_10_virtualbox.box
+vagrant box add --name windows10base ${BUILD_PATH}/windows_10_virtualbox.box
 
-# check to see the box is in the local repository
-vagrant box list
-
-# remove the built box now that its in the repository
-rm windows_10_virtualbox.box
-
-# create your test environment
-mkdir -p  ${SCRIPT_DIR}/test-windows-10 && cd ${SCRIPT_DIR}/test-windows-10
-
-# # initialize the vagrant environment
-# vagrant init
-cp ${BUILD_DIR}/vagrantfile-windows_10.template Vagrantfile
-
-# may want to run this to clear out certificates
-xfreerdp /u:vagrant /p:vagrant /v:127.0.0.1:3389
-
-# bring up the vm (first issues will take long time, in typical Microsoft fashion)
-vagrant up
-
-pause 5
-
-# log into the ms windows 10 vm
-vagrant rdp
+# Clear out certificates
+# xfreerdp /u:vagrant /p:vagrant /v:127.0.0.1:3389
